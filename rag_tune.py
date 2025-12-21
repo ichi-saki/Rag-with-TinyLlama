@@ -42,3 +42,46 @@ class RAG:
             self.collection = self.chroma_client.create_collection(name=self.collection_name, metadata={'hnsw:space': 'cosine'})
             print(f'created new collection: {self.collection_name}')
     
+    def get_text(self):
+        text = ""
+        with open('data/cpsc-handbook-2022.pdf', 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+
+            return text
+        
+    def get_chunks(self, text):
+        chunks = []
+        start = 0
+        i = 0
+        while start < len(text):
+            end = start + self.chunk_size
+            chunk = text[start:end]
+            chunks.append(chunk)
+            start += self.chunk_size - self.chunk_overlap
+
+            print(f'Length of chunks: {len(chunks)} chunks created')
+        return chunks
+    
+    def create_vector_index(self):
+        print('\nCreating vector index..')
+
+        if self.collection.count() > 0:
+            print(f'collection has {self.collection.count()} items')
+            return 
+        
+        text = self.get_text()
+        chunks = self.get_chunks(text)
+
+        embeddings = self.embedding_model.encode(chunks, show_progress_bar=False)
+
+        for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            self.collection.add(embeddings=[embedding.tolist()],
+                                documents=[chunk],
+                                metadatas=[{"chunk_id": i,
+                                            "source": "cpsc-handbook-2022.pdf",
+                                            "length": len(chunk)}],
+                                            ids=[f"chunk_{i}"])
+        print(f'Indexed {len(chunks)} chunks')
+        self.chunks = chunks
