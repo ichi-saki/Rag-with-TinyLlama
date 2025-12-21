@@ -85,3 +85,58 @@ class RAG:
                                             ids=[f"chunk_{i}"])
         print(f'Indexed {len(chunks)} chunks')
         self.chunks = chunks
+
+    def retrieve(self, query, k=None):
+        k = k or self.k_value
+
+        query_emb = self.embedding_model.encode([query])[0]
+
+        results = self.collection.query(query_embeddings=[query_emb.tolist()],
+                                        n_results=k,
+                                        include=['documents', 'metadatas', 'distances'])
+        
+        documents = results['documents'][0] if results['documents'] else []
+        distances = results['distances'][0] if results['distances'] else []
+
+        similarities = [1 - (dist / 2) for dist in distances]
+
+        filtered_docs = []
+        filtered_scores = []
+
+        for doc, score in zip(documents, similarities):
+            if score >= self.similarity_threshold:
+                filtered_docs.append(doc)
+                filtered_scores.append(score)
+
+        return filtered_docs, filtered_scores
+    
+    def create_prompt(self, query, context_chunks):
+        if context_chunks:
+            text = "\n".join([f'[Context {i+1}] {chunk[:300]}..' if len(chunk) > 300 else chunk for i, chunk in enumerate(context_chunks)])
+
+            prompt = f"""<|system|>
+                You are a helpful assistant for CSU Fullerton Computer Science students.
+                Answer the question based ONLY on the following context from the CS Handbook.
+                If the information is not in the context, say "I cannot find that information."
+                Context:
+                {text}
+                </s>
+                <|user|>
+                Question: {query}
+                Please answer based ONLY on the provided context.
+                </s>
+                <|assistant|>
+                Based on the CS Handbook, """
+        else:
+            prompt = f"""<|system|>
+                You are a helpful assistant for CSU Fullerton Computer Science students.
+                Answer the question to the best of your ability about computer science programs.
+                </s>
+                <|user|>
+                {query}
+                </s>
+                <|assistant|>
+                """
+        
+        return prompt
+
