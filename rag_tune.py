@@ -174,3 +174,30 @@ class RAG:
             response = response[len(prompt):].strip()
         
         return response
+    
+    def evaluate(self):
+
+        questions = ["What are the core courses required for a computer science undergraduate degree?",
+                "Describe the rules for completing a senior project, including prerequisites",
+                "What are the degree requirements for graduation?",]
+        
+        print('RAG evaluation')
+        results = []
+
+        for i, question in enumerate(questions):
+            print(f'\nQuestion {i+1}: {question}')
+
+            answer = self.generate_response(question)
+            print(f'RAG answer: {answer[:200]}..')
+
+            context_chunks, scores = self.retrieve(question)
+
+            results.append({
+                "question": question,
+                "rag_answer": answer,
+                "context_chunks": len(context_chunks),
+                "top_similarity": scores[0] if scores else 0,
+                "rag_length": len(answer),
+            })
+
+        return results
