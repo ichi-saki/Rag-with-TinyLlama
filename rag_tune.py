@@ -140,3 +140,37 @@ class RAG:
         
         return prompt
 
+    def generate_response(self, query, **gen_kwargs):
+        context_chunks, scores = self.retrieve(query)
+        print(f'Retrieved {len(context_chunks)} relevant chunks')
+
+        prompt = self.create_prompt(query, context_chunks)
+
+        params = {
+            "max_new_tokens": 300,
+            "temperature": 0.1, 
+            "top_k": 40,
+            "top_p": 0.9,
+            "repetition_penalty": 1.1,
+            "do_sample": True,
+            "pad_token_id": self.tokenizer.eos_token_id,
+            "eos_token_id": self.tokenizer.eos_token_id,
+        }
+
+        generation_config = {**params, **gen_kwargs}
+
+        inputs = self.tokenizer(prompt, return_tensors='pt', truncation=True, max_length=1024)
+        device = next(self.llm.parameters()).device
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+
+        with torch.inference_mode():
+            outputs = self.llm.generate(**inputs, **generation_config)
+
+        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        if '<|assistant|>' in response:
+            response = response.split('<|assistant|>')[-1].strip()
+        else:
+            response = response[len(prompt):].strip()
+        
+        return response
