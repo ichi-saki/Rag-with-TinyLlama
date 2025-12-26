@@ -26,7 +26,7 @@ class RAG:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        self.llm = AutoModelForCausalLM.from_pretrained('TinyLlama/TinyLlama-1.1B-Chat-v1.0', torch_dtype=torch.bfloat16, device_map='auto')
+        self.llm = AutoModelForCausalLM.from_pretrained('TinyLlama/TinyLlama-1.1B-Chat-v1.0', dtype=torch.bfloat16, device_map='auto')
 
         print('Loading embeddings model..')
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -201,3 +201,46 @@ class RAG:
             })
 
         return results
+    
+def main():
+    rag = RAG(chunk_size=400, chunk_overlap=80, k_value=5)
+    rag.create_vector_index()
+
+    print('generating answers\n')
+
+    questions = ["What are the core courses required for a computer science undergraduate degree?",
+        "Describe the rules for completing a senior project, including prerequisites",
+        "What are the degree requirements for graduation?",]
+
+    results = []
+
+    for q in questions:
+
+        answers = {}
+
+        answers['rag'] = rag.generate_response(
+            q, 
+            temperature=0.1,
+            top_k=40,
+            top_p=0.9
+        )
+
+        context_chunks, scores = rag.retrieve(q)
+
+        results.append({
+            'question': q,
+            'answers': answers,
+            'context_retrieved': len(context_chunks),
+            'similarity_scores': scores
+        })
+
+        for i, result in enumerate(results):
+            print(f"QUESTION {i+1}: {result['question']}\n")
+            print(f"Context chunks retrieved: {result['context_retrieved']}\n")
+            print(f"Similarity scores: {result['similarity_scores']}\n\n")
+            
+            print("RAG Factual Answer (temp=0.1):\n")
+            print(f"{result['answers']['rag']}\n\n")
+            
+if __name__ == "__main__":
+    main()
